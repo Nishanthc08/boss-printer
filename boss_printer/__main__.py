@@ -63,14 +63,17 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
         self.btn_set_default = Gtk.Button(label="Set default")
         self.btn_test_page = Gtk.Button(label="Print test page")
         self.btn_open_queue = Gtk.Button(label="Open queue")
+        self.btn_refresh = Gtk.Button(label="Refresh list")
 
         self.btn_set_default.connect("clicked", self.on_set_default_clicked)
         self.btn_test_page.connect("clicked", self.on_test_page_clicked)
         self.btn_open_queue.connect("clicked", self.on_open_queue_clicked)
+        self.btn_refresh.connect("clicked", self.on_refresh_clicked)
 
         btn_box.append(self.btn_set_default)
         btn_box.append(self.btn_test_page)
         btn_box.append(self.btn_open_queue)
+        btn_box.append(self.btn_refresh)
 
         right_box.append(self.label_title)
         right_box.append(self.label_status)
@@ -87,6 +90,7 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
         printers = cups_backend.list_printers()
         if not printers:
             self.label_title.set_text("No printers found (CUPS)")
+            self.label_status.set_text("")
             return
 
         for p in printers:
@@ -94,6 +98,9 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
             if p.is_default:
                 display += " (default)"
             self.printer_store.append([display, p.is_default])
+
+        self.label_title.set_text("Select a printer")
+        self.label_status.set_text("")
 
     def _get_selected_printer_name(self) -> Optional[str]:
         selection = self.printer_view.get_selection()
@@ -105,6 +112,21 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
         if display_name.endswith(" (default)"):
             return display_name[:-10]
         return display_name
+
+    def _show_error(self, message: str) -> None:
+        """Display a simple error dialog and also update the status label."""
+
+        self.label_status.set_text(message)
+
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            buttons=Gtk.ButtonsType.OK,
+            message_type=Gtk.MessageType.ERROR,
+            text=message,
+        )
+        dialog.connect("response", lambda d, _r: d.destroy())
+        dialog.show()
 
     # --- Callbacks -------------------------------------------------------
 
@@ -125,33 +147,36 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
     def on_set_default_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
         name = self._get_selected_printer_name()
         if not name:
-            self.label_status.set_text("No printer selected")
+            self._show_error("No printer selected")
             return
         if cups_backend.set_default_printer(name):
             self.label_status.set_text(f"Set default printer to {name}")
             self._load_printers()
         else:
-            self.label_status.set_text("Failed to set default printer")
+            self._show_error("Failed to set default printer")
 
     def on_test_page_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
         name = self._get_selected_printer_name()
         if not name:
-            self.label_status.set_text("No printer selected")
+            self._show_error("No printer selected")
             return
         if cups_backend.print_test_page(name):
             self.label_status.set_text("Test page sent")
         else:
-            self.label_status.set_text("Failed to send test page")
+            self._show_error("Failed to send test page")
 
     def on_open_queue_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
         name = self._get_selected_printer_name()
         if not name:
-            self.label_status.set_text("No printer selected")
+            self._show_error("No printer selected")
             return
         if cups_backend.open_queue(name):
             self.label_status.set_text("Opened queue (if available)")
         else:
-            self.label_status.set_text("Could not open queue tool")
+            self._show_error("Could not open queue tool")
+
+    def on_refresh_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
+        self._load_printers()
 
 
 class BossPrinterApp(Gtk.Application):

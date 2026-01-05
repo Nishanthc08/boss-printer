@@ -68,8 +68,10 @@ pip install -e .
 
 ## Status
 - Project scaffold: IN PROGRESS
-- Core GUI design: NOT STARTED
-- CUPS integration: NOT STARTED
+- Core GUI design: IN PROGRESS
+- CUPS integration: IN PROGRESS
 - Packaging: NOT STARTED
 
 For a detailed, date-based breakdown, see `docs/PROGRESS.md` and `docs/worklog.md`.
+
+For how to run and use the current prototype UI, see `docs/usage.md`.
