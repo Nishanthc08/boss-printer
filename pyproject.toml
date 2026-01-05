@@ -1,0 +1,26 @@
+[project]
+name = "boss-printer"
+version = "0.1.0"
+description = "Linux printer management GUI with government-office focused workflows"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "boss", email = "" }
+]
+
+[project.urls]
+Homepage = ""
+
+[project.optional-dependencies]
+# GUI-related dependencies are typically installed via apt on Debian (e.g., python3-gi, gir1.2-gtk-4.0).
+# Keep this section for any pure-Python deps you add later.
+
+dev = [
+  "black",
+  "flake8",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
