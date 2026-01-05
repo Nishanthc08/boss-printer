@@ -1,6 +1,7 @@
-"""Minimal GTK app entry point for boss-printer."""
+"""Minimal GTK app entry point for boss-printer with printer list UI."""
 
 import sys
+from typing import Optional
 
 try:
     import gi  # type: ignore
@@ -13,31 +14,144 @@ except Exception as exc:  # pragma: no cover
     print(f"Details: {exc}")
     sys.exit(1)
 
+from . import cups_backend
+
 
 class BossPrinterWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application) -> None:
         super().__init__(application=app)
         self.set_title("Boss Printer")
-        self.set_default_size(800, 600)
+        self.set_default_size(1000, 600)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=12,
-                      margin_bottom=12, margin_start=12, margin_end=12)
+        # Main layout: horizontal pane – left list, right details
+        paned = Gtk.Paned.new(Gtk.Orientation.HORIZONTAL)
+        self.set_child(paned)
 
-        label = Gtk.Label(label="Boss Printer – Linux Printer Management GUI")
-        label.set_wrap(True)
+        # Left: printers list
+        self.printer_store = Gtk.ListStore(str, bool)
+        self.printer_view = Gtk.TreeView(model=self.printer_store)
 
-        sub = Gtk.Label(
-            label=(
-                "This is a placeholder window. Next steps:\n"
-                "- List printers via CUPS on the left.\n"
-                "- Show selected printer details and actions on the right.\n"
-            )
+        renderer_text = Gtk.CellRendererText()
+        col = Gtk.TreeViewColumn("Printers", renderer_text, text=0)
+        self.printer_view.append_column(col)
+
+        select = self.printer_view.get_selection()
+        select.connect("changed", self.on_printer_selected)
+
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_child(self.printer_view)
+        scrolled.set_min_content_width(250)
+
+        paned.set_start_child(scrolled)
+
+        # Right: details + actions
+        right_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=12,
+            margin_top=12,
+            margin_bottom=12,
+            margin_start=12,
+            margin_end=12,
         )
-        sub.set_wrap(True)
 
-        box.append(label)
-        box.append(sub)
-        self.set_child(box)
+        self.label_title = Gtk.Label(label="Select a printer")
+        self.label_title.set_xalign(0.0)
+        self.label_status = Gtk.Label(label="")
+        self.label_status.set_xalign(0.0)
+
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.btn_set_default = Gtk.Button(label="Set default")
+        self.btn_test_page = Gtk.Button(label="Print test page")
+        self.btn_open_queue = Gtk.Button(label="Open queue")
+
+        self.btn_set_default.connect("clicked", self.on_set_default_clicked)
+        self.btn_test_page.connect("clicked", self.on_test_page_clicked)
+        self.btn_open_queue.connect("clicked", self.on_open_queue_clicked)
+
+        btn_box.append(self.btn_set_default)
+        btn_box.append(self.btn_test_page)
+        btn_box.append(self.btn_open_queue)
+
+        right_box.append(self.label_title)
+        right_box.append(self.label_status)
+        right_box.append(btn_box)
+
+        paned.set_end_child(right_box)
+
+        self._load_printers()
+
+    # --- Helpers ---------------------------------------------------------
+
+    def _load_printers(self) -> None:
+        self.printer_store.clear()
+        printers = cups_backend.list_printers()
+        if not printers:
+            self.label_title.set_text("No printers found (CUPS)")
+            return
+
+        for p in printers:
+            display = f"{p.name}"
+            if p.is_default:
+                display += " (default)"
+            self.printer_store.append([display, p.is_default])
+
+    def _get_selected_printer_name(self) -> Optional[str]:
+        selection = self.printer_view.get_selection()
+        model, tree_iter = selection.get_selected()
+        if tree_iter is None:
+            return None
+        display_name = model[tree_iter][0]
+        # Strip " (default)" suffix if present
+        if display_name.endswith(" (default)"):
+            return display_name[:-10]
+        return display_name
+
+    # --- Callbacks -------------------------------------------------------
+
+    def on_printer_selected(self, selection: Gtk.TreeSelection) -> None:
+        name = self._get_selected_printer_name()
+        if not name:
+            self.label_title.set_text("Select a printer")
+            self.label_status.set_text("")
+            return
+
+        default = cups_backend.get_default_printer()
+        is_default = default == name
+        self.label_title.set_text(name)
+        self.label_status.set_text(
+            "Status: default printer" if is_default else "Status: not default"
+        )
+
+    def on_set_default_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
+        name = self._get_selected_printer_name()
+        if not name:
+            self.label_status.set_text("No printer selected")
+            return
+        if cups_backend.set_default_printer(name):
+            self.label_status.set_text(f"Set default printer to {name}")
+            self._load_printers()
+        else:
+            self.label_status.set_text("Failed to set default printer")
+
+    def on_test_page_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
+        name = self._get_selected_printer_name()
+        if not name:
+            self.label_status.set_text("No printer selected")
+            return
+        if cups_backend.print_test_page(name):
+            self.label_status.set_text("Test page sent")
+        else:
+            self.label_status.set_text("Failed to send test page")
+
+    def on_open_queue_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
+        name = self._get_selected_printer_name()
+        if not name:
+            self.label_status.set_text("No printer selected")
+            return
+        if cups_backend.open_queue(name):
+            self.label_status.set_text("Opened queue (if available)")
+        else:
+            self.label_status.set_text("Could not open queue tool")
 
 
 class BossPrinterApp(Gtk.Application):
