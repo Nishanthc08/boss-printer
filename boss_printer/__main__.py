@@ -59,6 +59,11 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
         self.label_status = Gtk.Label(label="")
         self.label_status.set_xalign(0.0)
 
+        # Action log (show last 5 actions)
+        self.action_log: list[str] = []
+        self.label_log = Gtk.Label(label="")
+        self.label_log.set_xalign(0.0)
+
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.btn_set_default = Gtk.Button(label="Set default")
         self.btn_test_page = Gtk.Button(label="Print test page")
@@ -77,11 +82,13 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
 
         right_box.append(self.label_title)
         right_box.append(self.label_status)
+        right_box.append(self.label_log)
         right_box.append(btn_box)
 
         paned.set_end_child(right_box)
 
         self._load_printers()
+        self._update_buttons_enabled_state()
 
     # --- Helpers ---------------------------------------------------------
 
@@ -113,10 +120,11 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
             return display_name[:-10]
         return display_name
 
-    def _show_error(self, message: str) -> None:
+    def _show_error(self, message: str, detail: Optional[str] = None) -> None:
         """Display a simple error dialog and also update the status label."""
 
         self.label_status.set_text(message)
+        self._append_action_log(f"ERROR: {message}")
 
         dialog = Gtk.MessageDialog(
             transient_for=self,
@@ -125,13 +133,28 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
             message_type=Gtk.MessageType.ERROR,
             text=message,
         )
+        if detail:
+            dialog.format_secondary_text(detail)
         dialog.connect("response", lambda d, _r: d.destroy())
         dialog.show()
+
+    def _append_action_log(self, msg: str) -> None:
+        self.action_log.insert(0, msg)
+        # keep last 5
+        self.action_log = self.action_log[:5]
+        self.label_log.set_text("Recent: " + " | ".join(self.action_log))
+
+    def _update_buttons_enabled_state(self) -> None:
+        has_selection = self._get_selected_printer_name() is not None
+        self.btn_set_default.set_sensitive(has_selection)
+        self.btn_test_page.set_sensitive(has_selection)
+        self.btn_open_queue.set_sensitive(has_selection)
 
     # --- Callbacks -------------------------------------------------------
 
     def on_printer_selected(self, selection: Gtk.TreeSelection) -> None:
         name = self._get_selected_printer_name()
+        self._update_buttons_enabled_state()
         if not name:
             self.label_title.set_text("Select a printer")
             self.label_status.set_text("")
@@ -149,34 +172,42 @@ class BossPrinterWindow(Gtk.ApplicationWindow):
         if not name:
             self._show_error("No printer selected")
             return
-        if cups_backend.set_default_printer(name):
+        ok, detail = cups_backend.set_default_printer(name)
+        if ok:
             self.label_status.set_text(f"Set default printer to {name}")
+            self._append_action_log(f"Set default: {name}")
             self._load_printers()
         else:
-            self._show_error("Failed to set default printer")
+            self._show_error("Failed to set default printer", detail)
 
     def on_test_page_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
         name = self._get_selected_printer_name()
         if not name:
             self._show_error("No printer selected")
             return
-        if cups_backend.print_test_page(name):
+        ok, detail = cups_backend.print_test_page(name)
+        if ok:
             self.label_status.set_text("Test page sent")
+            self._append_action_log(f"Printed test page: {name}")
         else:
-            self._show_error("Failed to send test page")
+            self._show_error("Failed to send test page", detail)
 
     def on_open_queue_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
         name = self._get_selected_printer_name()
         if not name:
             self._show_error("No printer selected")
             return
-        if cups_backend.open_queue(name):
+        ok, detail = cups_backend.open_queue(name)
+        if ok:
             self.label_status.set_text("Opened queue (if available)")
+            self._append_action_log(f"Opened queue: {name}")
         else:
-            self._show_error("Could not open queue tool")
+            self._show_error("Could not open queue tool", detail)
 
     def on_refresh_clicked(self, button: Gtk.Button) -> None:  # noqa: ARG002
         self._load_printers()
+        self._append_action_log("Refreshed printer list")
+        self._update_buttons_enabled_state()
 
 
 class BossPrinterApp(Gtk.Application):

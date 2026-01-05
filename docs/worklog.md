@@ -50,10 +50,28 @@ Keep entries short and focused; one section per calendar day.
   - Add CI pipeline to run linters and unit tests.
 - Files touched: `README.md`, `docs/worklog.md`.
 
+## Day 5 – 2026-01-09
+- Tests and UI improvements.
+  - Added unit test `tests/test_cups_backend.py` mocking `lpstat` output to verify
+    `list_printers()` parsing and default detection.
+  - Introduced an in-memory action log in the UI showing the last 5 actions.
+  - Disabled action buttons when no printer is selected to avoid invalid calls.
+- Files touched: `tests/test_cups_backend.py`, `boss_printer/__main__.py`.
+
+## Day 6 – 2026-01-10
+- CI and developer docs.
+  - Added basic GitHub Actions workflow `.github/workflows/ci.yml` to run pytest
+    and ruff (linters) on push/PR.
+  - Added `docs/developer.md` with how-to run tests, linting, and dev run steps.
+  - Updated `boss_printer/cups_backend.py` to return (success, detail) tuples so
+    the UI can present actionable error details; adapted UI code to display
+    optional detail text in error dialogs.
+- Files touched: `.github/workflows/ci.yml`, `docs/developer.md`,
+  `boss_printer/cups_backend.py`, `boss_printer/__main__.py`.
+
 ---
 
 Going forward:
 - Continue one entry per day/session with concise work descriptions and open questions.
 - Add commit hashes or PR links where relevant.
-
 
